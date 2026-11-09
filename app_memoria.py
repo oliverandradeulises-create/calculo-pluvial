@@ -1250,6 +1250,10 @@ def dibujar_cota_cad(
         )
 
 
+from matplotlib.figure import Figure
+
+
+@st.cache_data(show_spinner=False, max_entries=120)
 def generar_grafico_seccion(
     tipo_elemento,
     b,
@@ -1262,7 +1266,9 @@ def generar_grafico_seccion(
     ancho_bajada_cm=None,
     largo_bajada_cm=None,
 ):
-    fig, ax = plt.subplots(figsize=(4.6, 3.1), dpi=135)
+    """Genera el croquis en un lienzo aislado (Thread-Safe) y devuelve los bytes PNG en caché."""
+    fig = Figure(figsize=(4.6, 3.1), dpi=135)
+    ax = fig.add_subplot(111)
 
     if "Canal" in tipo_elemento:
         es_canaleta = "Canaleta" in tipo_elemento
@@ -1313,7 +1319,6 @@ def generar_grafico_seccion(
                 label=f"B. Libre = {borde_libre_cm:.1f} cm",
             )
 
-        # Acotaciones CAD positivas con holgura limpia
         off_x = max(x_sup_der * 0.28, 3.5)
         off_y = max(H * 0.20, 3.0)
         dibujar_cota_cad(
@@ -1515,7 +1520,6 @@ def generar_grafico_seccion(
             label=f"Límite 80% ({y_80_cm:.1f} cm)",
         )
 
-        # Acotaciones CAD positivas con texto vertical rotado
         off_x = max(D_total * 0.25, 3.0)
         off_y = max(D_total * 0.20, 2.5)
         dibujar_cota_cad(
@@ -1561,8 +1565,11 @@ def generar_grafico_seccion(
         facecolor="#F8F9FA",
         edgecolor="#E0E0E0",
     )
-    plt.tight_layout()
-    return fig
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=160, bbox_inches="tight")
+    return buf.getvalue()
 # ==============================================================================
 # GENERADOR DEL DOCUMENTO DOCX
 # ==============================================================================
@@ -2786,19 +2793,15 @@ st.markdown("### 📊 Croquis Acotado de la Sección Hidráulica")
 img_secundaria_bytes = None
 
 if hidro.get("es_smacna", False):
-    fig_canalon = generar_grafico_seccion(
+    img_seccion_bytes = generar_grafico_seccion(
         tipo_elemento="Canaleta Rectangular",
         b=hidro["b_canal_cm"],
         H=hidro["h_canal_cm"],
         y=hidro["y_cm"],
         borde_libre_cm=hidro["borde_libre_cm"],
     )
-    buf_can = io.BytesIO()
-    fig_canalon.savefig(buf_can, format="png", dpi=160, bbox_inches="tight")
-    img_seccion_bytes = buf_can.getvalue()
-    plt.close(fig_canalon)
 
-    fig_bap = generar_grafico_seccion(
+    img_secundaria_bytes = generar_grafico_seccion(
         tipo_elemento="Bajante Pluvial Vertical",
         b=hidro["ancho_bajada_cm"],
         H=hidro["largo_bajada_cm"],
@@ -2808,10 +2811,6 @@ if hidro.get("es_smacna", False):
         ancho_bajada_cm=hidro.get("ancho_bajada_cm"),
         largo_bajada_cm=hidro.get("largo_bajada_cm"),
     )
-    buf_bap = io.BytesIO()
-    fig_bap.savefig(buf_bap, format="png", dpi=160, bbox_inches="tight")
-    img_secundaria_bytes = buf_bap.getvalue()
-    plt.close(fig_bap)
 
     c_esp1, c_graf1, c_graf2, c_esp2 = st.columns([0.4, 1.2, 1.2, 0.4])
     with c_graf1:
@@ -2821,7 +2820,7 @@ if hidro.get("es_smacna", False):
         st.caption("**Sección de la Bajante Pluvial Acotada (cm)**")
         st.image(img_secundaria_bytes, use_container_width=True)
 else:
-    fig_seccion = generar_grafico_seccion(
+    img_seccion_bytes = generar_grafico_seccion(
         tipo_elemento=tipo_elemento,
         b=b_canal_cm,
         H=h_canal_cm,
@@ -2837,11 +2836,6 @@ else:
         ancho_bajada_cm=hidro.get("ancho_bajada_cm"),
         largo_bajada_cm=hidro.get("largo_bajada_cm"),
     )
-
-    img_buffer = io.BytesIO()
-    fig_seccion.savefig(img_buffer, format="png", dpi=160, bbox_inches="tight")
-    img_seccion_bytes = img_buffer.getvalue()
-    plt.close(fig_seccion)
 
     col_izq, col_centro, col_der = st.columns([1, 1.3, 1])
     with col_centro:
