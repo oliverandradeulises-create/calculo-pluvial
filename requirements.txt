@@ -1,0 +1,6 @@
+streamlit
+matplotlib
+numpy
+openpyxl
+requests
+python-docx
